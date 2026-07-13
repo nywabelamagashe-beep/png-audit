@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRO screenshot auditor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9f9f8;color:#1a1a18;min-height:100vh;padding:0 0 80px}
+
+.wrap{max-width:900px;margin:0 auto;padding:32px 24px}
+
+/* header */
+.app-title{font-size:20px;font-weight:600;letter-spacing:-0.02em}
+.app-sub{font-size:13px;color:#888;margin-top:3px;margin-bottom:28px}
+
+/* cards */
+.card{background:#fff;border:1px solid #e8e8e6;border-radius:10px;padding:20px 22px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.card-sub{font-size:12px;color:#888;margin-bottom:14px;line-height:1.5}
+
+/* form fields */
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+.field-row.four{grid-template-columns:repeat(4,1fr)}
+label{font-size:11px;color:#888;display:block;margin-bottom:4px;font-weight:500}
+input[type=text],input[type=number]{width:100%;padding:8px 10px;font-size:13px;border:1px solid #ddd;border-radius:6px;font-family:inherit;background:#fff}
+input:focus{outline:none;border-color:#1a1a18}
+
+/* upload */
+.dropzone{border:1.5px dashed #ccc;border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:border-color .15s;background:#fcfcfb}
+.dropzone:hover,.dropzone.drag{border-color:#1a1a18;background:#f5f5f3}
+.dropzone p{font-size:13px;color:#888}
+.dropzone .dz-main{font-size:14px;color:#1a1a18;font-weight:500;margin-bottom:4px}
+#fileInput{display:none}
+
+.shot-list{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.shot-item{display:flex;align-items:center;gap:10px;border:1px solid #e8e8e6;border-radius:8px;padding:8px 10px}
+.shot-item img{width:56px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #e8e8e6}
+.shot-item select{font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid #ddd;font-family:inherit}
+.shot-item .shot-name{font-size:12px;color:#555;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shot-remove{font-size:16px;color:#bbb;cursor:pointer;padding:0 4px;line-height:1}
+.shot-remove:hover{color:#c0392b}
+
+/* checklist */
+.checklist-section{border:1px solid #e8e8e6;border-radius:8px;margin-bottom:10px;overflow:hidden}
+.checklist-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fafaf8;cursor:pointer;border-bottom:1px solid #e8e8e6}
+.checklist-hdr-title{font-size:13px;font-weight:600}
+.checklist-hdr-count{font-size:11px;color:#888}
+.checklist-body{padding:10px 14px}
+.checklist-body.collapsed{display:none}
+.issue-row{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid #f1f1ef}
+.issue-row:last-child{border-bottom:none}
+.issue-row input[type=checkbox]{margin-top:3px;flex-shrink:0;width:15px;height:15px;cursor:pointer}
+.issue-label{flex:1;font-size:12.5px;line-height:1.4;cursor:pointer}
+.issue-sev{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:99px;white-space:nowrap;text-transform:uppercase;letter-spacing:.02em}
+.sev-critical{background:#fdecea;color:#c0392b}
+.sev-high{background:#fef3e2;color:#d4720a}
+.sev-medium{background:#e8f0fe;color:#1a6bb5}
+.sev-low{background:#edf7ee;color:#2d7d3a}
+.custom-add-row{display:flex;gap:8px;margin-top:10px}
+.custom-add-row input{flex:1;padding:7px 9px;font-size:12px;border:1px solid #ddd;border-radius:6px;font-family:inherit}
+.custom-add-row button{padding:7px 12px;font-size:12px;border-radius:6px;border:1px solid #ddd;background:#fff;font-weight:600}
+.custom-add-row button:hover{background:#f5f5f3}
+.custom-tag{font-size:10.5px;color:#888;margin-top:4px}
+
+/* outreach email */
+.email-field{border:1px solid #ddd;border-radius:6px;padding:9px 11px;font-size:13px;line-height:1.6;background:#fff;white-space:pre-wrap}
+.email-field:focus{border-color:#1a1a18;background:#fffef0}
+.email-body{min-height:160px}
+
+/* buttons */
+button{font-family:inherit;cursor:pointer}
+.btn{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid #1a1a18;background:#1a1a18;color:#fff;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-ghost{background:#fff;color:#1a1a18;border:1px solid #ddd}
+.btn-ghost:hover{background:#f5f5f3;opacity:1}
+.btn-row{display:flex;gap:10px;margin-top:16px}
+
+/* status */
+.status{font-size:12px;color:#888;margin-top:10px;display:flex;align-items:center;gap:8px}
+.error-box{background:#fdf3f2;border:1px solid #f3c9c4;color:#c0392b;font-size:12.5px;border-radius:8px;padding:10px 14px;margin-top:10px}
+
+/* report */
+#report{display:none}
+.report-page{background:#fff;border:1px solid #e8e8e6;border-radius:10px;padding:28px 30px;margin-bottom:16px}
+.rp-header{font-size:12px;color:#888;border-bottom:1px solid #e8e8e6;padding-bottom:10px;margin-bottom:20px;display:flex;justify-content:space-between}
+.rp-domain{color:#1155CC;text-decoration:underline}
+
+.hook-box{background:#fdf3f2;border-radius:8px;padding:16px 18px;margin-bottom:16px}
+.hook-label{font-size:12px;color:#c0392b;margin-bottom:4px}
+.hook-num{font-size:32px;font-weight:700;color:#c0392b}
+
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat-box{background:#eef2fb;border-radius:8px;padding:12px;text-align:center}
+.stat-label{font-size:10px;color:#555;margin-bottom:3px}
+.stat-value{font-size:19px;font-weight:700}
+
+.overall-card{display:flex;align-items:center;gap:18px;padding:16px 4px;margin-bottom:18px}
+.overall-score{font-size:44px;font-weight:700;min-width:70px}
+.overall-score.critical{color:#c0392b}
+.overall-score.poor{color:#d4720a}
+.overall-score.fair{color:#1a6bb5}
+.overall-score.good{color:#2d7d3a}
+.overall-meta .ol{font-size:14px;font-weight:600}
+.overall-meta .os{font-size:12px;color:#888;margin-top:2px}
+
+.score-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:20px}
+.score-card{border:1px solid #e8e8e6;border-radius:8px;padding:12px}
+.score-area{font-size:11px;color:#888;margin-bottom:4px}
+.score-num{font-size:22px;font-weight:700}
+.score-num.critical{color:#c0392b}
+.score-num.poor{color:#d4720a}
+.score-num.fair{color:#1a6bb5}
+.score-num.good{color:#2d7d3a}
+
+.section-title{font-size:15px;font-weight:600;margin:22px 0 12px}
+.finding{border:1px solid #e8e8e6;border-radius:8px;margin-bottom:8px;overflow:hidden}
+.finding-hdr{display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:13px;font-weight:500}
+.finding-title{flex:1}
+.badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.b-critical{background:#fdecea;color:#c0392b}
+.b-high{background:#fef3e2;color:#d4720a}
+.b-medium{background:#e8f0fe;color:#1a6bb5}
+.b-low{background:#edf7ee;color:#2d7d3a}
+.b-p1{background:#fdecea;color:#c0392b}
+.b-p2{background:#fef3e2;color:#d4720a}
+.b-p3{background:#e8f0fe;color:#1a6bb5}
+.finding-body{padding:0 14px 14px;font-size:12.5px;color:#555;line-height:1.6}
+.finding-row{margin-top:8px}
+.finding-lbl{font-weight:600;color:#1a1a18;display:block;font-size:11px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
+
+.evidence-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.evidence-item img{width:100%;border-radius:6px;border:1px solid #e8e8e6;display:block;margin-bottom:6px}
+.evidence-cap{font-size:11.5px;color:#555;line-height:1.4}
+.evidence-tag{font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
+
+.cta-box{background:#D85A30;color:#fff;border-radius:8px;padding:20px;text-align:center;margin-top:20px}
+.cta-box h3{font-size:15px;margin-bottom:6px}
+.cta-box p{font-size:12px;opacity:.9;margin-bottom:10px}
+.cta-box .contact{font-size:13px;font-weight:600}
+
+.editable{outline:none}
+.editable:hover{background:#fafaf8}
+.editable:focus{background:#fffef0}
+
+@media print{
+  body{background:#fff}
+  .no-print{display:none!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="app-title">CRO screenshot auditor</div>
+  <div class="app-sub">Upload store screenshots, check off what's wrong, get a scored branded audit report — export as PDF. Fully rule-based, runs entirely in your browser, no AI calls.</div>
+
+  <div class="card no-print" id="setupCard">
+    <div class="card-title">Store details</div>
+    <div class="card-sub">Domain is required. Traffic stats are optional — add them if you have Similarweb or GA4 numbers, and they'll lead the report as a hook stat.</div>
+    <div class="field-row">
+      <div>
+        <label>Store domain</label>
+        <input type="text" id="domainInput" placeholder="example.co.za">
+      </div>
+      <div>
+        <label>Store / brand name <span style="font-weight:400">(optional, defaults to domain)</span></label>
+        <input type="text" id="brandInput" placeholder="Daily Discounts">
+      </div>
+    </div>
+    <div class="field-row">
+      <div>
+        <label>Recipient first name <span style="font-weight:400">(optional)</span></label>
+        <input type="text" id="recipientInput" placeholder="e.g. Thabo">
+      </div>
+      <div>
+        <label>Your name / contact / sign-off</label>
+        <input type="text" id="contactInput" placeholder="Jane, jane@agency.co.za" value="MGMetrics — CRO for D2C ecommerce">
+      </div>
+    </div>
+    <div class="field-row four">
+      <div>
+        <label>Paid traffic %</label>
+        <input type="number" id="paidTraffic" placeholder="e.g. 73.7">
+      </div>
+      <div>
+        <label>Bounce rate %</label>
+        <input type="number" id="bounceRate" placeholder="e.g. 94.7">
+      </div>
+      <div>
+        <label>Avg. visit (sec)</label>
+        <input type="number" id="avgVisit" placeholder="e.g. 11">
+      </div>
+      <div>
+        <label>Pages / visit</label>
+        <input type="number" step="0.01" id="pagesVisit" placeholder="e.g. 1.03">
+      </div>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <div class="card-title">Screenshots</div>
+    <div class="card-sub">Add homepage, product page, checkout, mobile view — whatever you have. Tag each so it lines up with the checklist below and appears as evidence in the report.</div>
+    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+      <div class="dz-main">Click to upload or drag screenshots here</div>
+      <p>PNG or JPG, any size</p>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+    <div class="shot-list" id="shotList"></div>
+  </div>
+
+  <div class="card no-print" id="checklistCard">
+    <div class="card-title">Audit checklist</div>
+    <div class="card-sub">Tick every issue you actually observed in the screenshots. Nothing here is guessed — the report only includes what you check, plus scores computed from what you check. Add your own line item at the bottom of any section if it's not in the list.</div>
+    <div id="checklistContainer"></div>
+    <div class="btn-row">
+      <button class="btn" id="generateBtn" onclick="generateReport()">Generate report</button>
+      <button class="btn-ghost btn" onclick="addManualFinding()">+ Add standalone finding</button>
+    </div>
+    <div id="statusArea"></div>
+  </div>
+
+  <div class="card no-print" id="emailCard" style="display:none">
+    <div class="card-title">Outreach email</div>
+    <div class="card-sub">Auto-filled from the domain, contact, stats, and score above — nothing to re-type. Click into either field to tweak, then copy.</div>
+    <label>Subject</label>
+    <div class="editable email-field" contenteditable="true" id="emailSubject"></div>
+    <label style="margin-top:10px">Body</label>
+    <div class="editable email-field email-body" contenteditable="true" id="emailBody"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="copyEmail(this)">Copy email</button>
+    </div>
+  </div>
+
+  <div id="report"></div>
+
+  <div class="btn-row no-print" id="exportRow" style="display:none">
+    <button class="btn" onclick="exportPDF()">Export PDF</button>
+    <button class="btn-ghost btn" onclick="scrollToReport()">Jump to report</button>
+  </div>
+
+</div>
+
+<script>
+let shots = []; // {file, dataUrl, tag, caption}
+let findings = []; // populated on generate
+let sectionScores = {};
+let overallScore = null;
+
+const SECTION_OPTIONS = ["Homepage","Product page","Checkout","Mobile view","Forms","Other"];
+
+// ---------- rule-based issue library ----------
+// Every issue: severity drives the score deduction and the default priority/badge.
+// effort and impact are pre-written defaults — all editable in the final report.
+const SEV_DEDUCTION = { Critical: 30, High: 18, Medium: 10, Low: 5 };
+const SEV_PRIORITY  = { Critical: 'P1', High: 'P1', Medium: 'P2', Low: 'P3' };
+
+const ISSUE_LIBRARY = {
+  "Homepage": [
+    { id:'H1', severity:'Critical', title:'Paid clicks land on homepage instead of the exact product/offer advertised',
+      observation:'The page shown to paid visitors is a general homepage or category page, not the specific product or offer the ad promised.',
+      mechanism:'A visitor who clicked a specific product then has to re-search for what they already chose — most won\u2019t bother.',
+      fix:'Build a dedicated landing page per ad group/product that matches the ad exactly.', effort:'Medium', impact:'Fewer paid clicks lost to re-search friction' },
+    { id:'H2', severity:'Critical', title:'No clear value proposition above the fold',
+      observation:'A first-time visitor can\u2019t tell what the store sells or why to buy from it within the first screen.',
+      mechanism:'Without an immediate reason to stay, visitors bounce before they ever evaluate the offer.',
+      fix:'Add a one-line value proposition and primary offer directly under the header.', effort:'Medium', impact:'Higher scroll-through and time on page' },
+    { id:'H3', severity:'High', title:'Primary call-to-action not visible without scrolling',
+      observation:'The main "shop now" / "get started" action sits below the fold on standard screen sizes.',
+      mechanism:'Visitors who don\u2019t scroll never see a path to convert, especially on impatient paid traffic.',
+      fix:'Move the primary CTA above the fold and repeat it at natural scroll stops.', effort:'Low', impact:'More visitors reach a conversion action' },
+    { id:'H4', severity:'Medium', title:'No trust signals near the fold (reviews, logos, guarantees)',
+      observation:'Nothing on the first screen signals credibility — no ratings, press logos, or guarantee.',
+      mechanism:'New visitors have no reason to trust an unfamiliar store enough to proceed.',
+      fix:'Add a star rating, review count, or trust badge within the first screen.', effort:'Low', impact:'Reduced early-stage drop-off' },
+    { id:'H5', severity:'Medium', title:'Headline leads with features, not outcomes',
+      observation:'The main headline describes what the product is rather than what it does for the buyer.',
+      mechanism:'Feature-led copy makes visitors do the work of translating features into benefits — most won\u2019t.',
+      fix:'Rewrite the headline to lead with the outcome or result the buyer gets.', effort:'Low', impact:'Clearer first impression, better message-match' },
+    { id:'H6', severity:'Medium', title:'Navigation overload / too many competing paths',
+      observation:'The main navigation offers many categories and links competing for attention with the primary offer.',
+      mechanism:'Too many choices at the top of the funnel increases decision fatigue and exit rate.',
+      fix:'Simplify navigation on landing pages to 2\u20133 clear paths.', effort:'Medium', impact:'Fewer exits via navigation instead of converting' },
+    { id:'H7', severity:'Low', title:'No urgency or scarcity element on the offer',
+      observation:'Nothing on the page gives a reason to act now rather than later.',
+      mechanism:'Without urgency, visitors defer the decision and often never return.',
+      fix:'Add a genuine urgency element — limited stock, time-boxed offer, or seasonal deadline.', effort:'Low', impact:'Higher same-session conversion rate' },
+    { id:'H8', severity:'Low', title:'Page feels visually cluttered or inconsistent',
+      observation:'Spacing, fonts, or colors are inconsistent across sections, making the page feel unpolished.',
+      mechanism:'Visual noise increases cognitive load and can quietly undermine perceived trust.',
+      fix:'Tighten spacing and enforce a consistent type/color system across the page.', effort:'Medium', impact:'Improved perceived quality and trust' },
+  ],
+  "Product page": [
+    { id:'P1', severity:'High', title:'Product images are low quality or show too few angles',
+      observation:'Product photography is blurry, low-resolution, or shows only a single angle.',
+      mechanism:'Buyers can\u2019t evaluate what they\u2019re paying for and default to hesitation or abandonment.',
+      fix:'Add multiple high-resolution angles and, where relevant, a zoom or lifestyle shot.', effort:'Medium', impact:'Higher add-to-cart rate' },
+    { id:'P2', severity:'Critical', title:'Price or offer not visible without scrolling',
+      observation:'The price and buy action sit below the fold on the product page.',
+      mechanism:'An 11-second visitor leaves before finding a reason to stay if price and action aren\u2019t immediately visible.',
+      fix:'Re-order the page so price and add-to-cart sit above the fold on mobile and desktop.', effort:'Low', impact:'More visitors reach the add-to-cart action' },
+    { id:'P3', severity:'High', title:'No social proof near the add-to-cart button',
+      observation:'Reviews or ratings are absent, or placed far from the purchase decision point.',
+      mechanism:'Buyers hesitate at the moment of decision without visible proof others bought and were satisfied.',
+      fix:'Place a star rating and review count directly beside the add-to-cart button.', effort:'Low', impact:'Reduced last-second hesitation' },
+    { id:'P4', severity:'Medium', title:'Shipping and returns info buried or missing',
+      observation:'Delivery time, cost, and return policy aren\u2019t visible on the product page itself.',
+      mechanism:'Unanswered logistics questions are a common, avoidable reason for cart abandonment.',
+      fix:'Surface shipping cost/time and return policy directly on the product page.', effort:'Low', impact:'Fewer objections carried into checkout' },
+    { id:'P5', severity:'Medium', title:'Product description doesn\u2019t address buyer objections',
+      observation:'The copy describes the product but doesn\u2019t answer likely hesitations (durability, fit, compatibility, etc).',
+      mechanism:'Unaddressed objections get resolved by leaving to research elsewhere — and not coming back.',
+      fix:'Add an FAQ or objection-handling block based on the most common pre-sale questions.', effort:'Medium', impact:'Fewer visitors leaving to cross-check elsewhere' },
+    { id:'P6', severity:'Low', title:'No urgency or stock indicator',
+      observation:'Nothing signals limited availability or a time-boxed reason to buy now.',
+      mechanism:'Without urgency, purchase decisions get deferred and often abandoned entirely.',
+      fix:'Add a genuine low-stock or delivery-cutoff indicator where accurate.', effort:'Low', impact:'Higher same-session purchase rate' },
+    { id:'P7', severity:'Low', title:'Related/upsell products distract from the primary CTA',
+      observation:'Cross-sell or "you may also like" sections compete visually with the main add-to-cart action.',
+      mechanism:'Extra choices before the primary decision is made increase the chance of leaving without buying.',
+      fix:'Move upsells below the fold, after the primary purchase decision point.', effort:'Low', impact:'Cleaner path to the primary conversion' },
+  ],
+  "Checkout": [
+    { id:'C1', severity:'Critical', title:'Too many form fields required to complete a purchase',
+      observation:'Checkout asks for fields beyond what\u2019s needed to fulfil the order (e.g. company, how-did-you-hear, unnecessary phone/DOB).',
+      mechanism:'Every unnecessary field is a fresh chance to abandon — friction compounds field by field.',
+      fix:'Cut the checkout form to the minimum required to ship and charge — typically 4\u20136 fields.', effort:'Medium', impact:'Higher checkout completion rate' },
+    { id:'C2', severity:'Critical', title:'No guest checkout option',
+      observation:'Buyers are forced to create an account before they can complete a purchase.',
+      mechanism:'Mandatory account creation is one of the most common, well-documented causes of cart abandonment.',
+      fix:'Offer guest checkout with an optional "create an account" step after purchase.', effort:'High', impact:'Recovers a meaningful share of otherwise-abandoned carts' },
+    { id:'C3', severity:'High', title:'Payment or security trust badges missing at checkout',
+      observation:'No visible security seals, accepted payment logos, or SSL indicators during checkout.',
+      mechanism:'Entering card details on an unfamiliar site without visible reassurance raises hesitation right at the finish line.',
+      fix:'Add recognized payment logos and a security badge near the payment fields.', effort:'Low', impact:'Reduced hesitation entering payment details' },
+    { id:'C4', severity:'High', title:'Shipping cost revealed too late in the flow',
+      observation:'Shipping cost only appears on the final step, after the buyer has already invested time in the flow.',
+      mechanism:'Surprise costs at the last step are one of the top reasons buyers abandon a completed cart.',
+      fix:'Show shipping cost (or a clear estimate) on the product page or cart, before final checkout.', effort:'Medium', impact:'Fewer late-stage abandonments' },
+    { id:'C5', severity:'Medium', title:'Checkout spans too many steps or pages',
+      observation:'Completing a purchase requires more than 2\u20133 distinct steps or page loads.',
+      mechanism:'Each additional step is another point where a buyer can lose momentum or get distracted.',
+      fix:'Consolidate checkout into a single page or a clearly-progressed 2\u20133 step flow.', effort:'High', impact:'Shorter time-to-purchase, fewer drop-offs' },
+    { id:'C6', severity:'Low', title:'No progress indicator during checkout',
+      observation:'Buyers can\u2019t see how many steps remain in a multi-step checkout.',
+      mechanism:'Not knowing how much is left makes the process feel longer and increases abandonment.',
+      fix:'Add a simple step indicator (e.g. "Step 2 of 3") to the checkout flow.', effort:'Low', impact:'Reduced perceived effort' },
+    { id:'C7', severity:'Medium', title:'Error messages are unclear or validation is missing',
+      observation:'Invalid fields (card number, address, etc) either fail silently or show unhelpful generic errors.',
+      mechanism:'Buyers who can\u2019t tell what went wrong give up rather than troubleshoot a checkout form.',
+      fix:'Add clear, field-specific inline validation messages.', effort:'Medium', impact:'Fewer silent checkout failures' },
+  ],
+  "Mobile view": [
+    { id:'M1', severity:'Critical', title:'Page takes too long to become usable on mobile',
+      observation:'The mobile page is slow to load or interact with — content is visible but not yet tappable.',
+      mechanism:'Paid traffic has less built-in patience — a meaningful share never sees the page at all if it\u2019s slow to load.',
+      fix:'Compress images, defer non-critical scripts, and target under 2\u20133 seconds to interactive.', effort:'High', impact:'Recovers visitors lost before the page even renders' },
+    { id:'M2', severity:'High', title:'Tap targets are too small or too close together',
+      observation:'Buttons and links are smaller than roughly 44\u00d744px or crowd each other on mobile.',
+      mechanism:'Mis-taps cause frustration and unintended navigation, pushing visitors to give up.',
+      fix:'Resize interactive elements to a minimum 44\u00d744px tap target with adequate spacing.', effort:'Medium', impact:'Fewer mis-taps and abandoned mobile sessions' },
+    { id:'M3', severity:'High', title:'No sticky/persistent call-to-action on scroll',
+      observation:'The primary CTA disappears once the visitor scrolls past it and doesn\u2019t reappear.',
+      mechanism:'On mobile, re-finding the CTA after reading is enough friction to lose the visitor.',
+      fix:'Add a sticky bottom CTA bar that appears after initial scroll depth.', effort:'Low', impact:'Shorter path back to the conversion action' },
+    { id:'M4', severity:'Critical', title:'Text or buttons are cut off / require horizontal scrolling',
+      observation:'Content overflows the mobile viewport, forcing horizontal scrolling or cutting off text.',
+      mechanism:'A visibly broken layout signals an untrustworthy or abandoned site within seconds.',
+      fix:'Fix responsive breakpoints so all content fits the mobile viewport without horizontal scroll.', effort:'Medium', impact:'Removes an immediate trust and usability barrier' },
+    { id:'M5', severity:'Medium', title:'Forms aren\u2019t optimized for mobile keyboards',
+      observation:'Input fields don\u2019t trigger the right keyboard type (e.g. numeric for phone, email keyboard for email).',
+      mechanism:'Wrong keyboards slow down and frustrate mobile form completion.',
+      fix:'Set correct input types/attributes so mobile keyboards match each field.', effort:'Medium', impact:'Faster, less frustrating mobile form entry' },
+    { id:'M6', severity:'Medium', title:'Pop-ups or banners block content on mobile',
+      observation:'An overlay, cookie banner, or promo pop-up covers key content or the CTA on mobile without an easy close.',
+      mechanism:'Blocking the thing a visitor came to see is one of the fastest ways to trigger a bounce.',
+      fix:'Make all overlays easily dismissible and delay their trigger past initial page load.', effort:'Low', impact:'Fewer immediate mobile bounces' },
+  ],
+  "Forms": [
+    { id:'F1', severity:'High', title:'Form asks for more fields than necessary',
+      observation:'The form collects fields beyond what\u2019s required for the immediate next step.',
+      mechanism:'Every extra field lowers completion rate — visible effort is a direct tax on conversion.',
+      fix:'Cut the form to the minimum fields needed now; enrich data later via other means.', effort:'Medium', impact:'Higher form completion rate' },
+    { id:'F2', severity:'Medium', title:'No inline validation / unclear error states',
+      observation:'Mistakes aren\u2019t flagged until after submission, or errors don\u2019t explain what to fix.',
+      mechanism:'Visitors who hit an unclear error on submission often abandon rather than retry.',
+      fix:'Add real-time, field-specific validation with clear correction guidance.', effort:'Medium', impact:'Fewer failed submissions' },
+    { id:'F3', severity:'Medium', title:'Submit button is unclear or low-contrast',
+      observation:'The submit action doesn\u2019t stand out visually or its label is vague (e.g. "Submit" with no context).',
+      mechanism:'An unclear final action adds hesitation at the exact moment of commitment.',
+      fix:'Use a high-contrast button with a specific, benefit-led label.', effort:'Low', impact:'Clearer final conversion step' },
+    { id:'F4', severity:'Low', title:'No privacy or trust reassurance near the form',
+      observation:'Nothing near the form addresses what happens with the visitor\u2019s data.',
+      mechanism:'Data-privacy hesitation quietly suppresses completion, especially for forms asking for contact info.',
+      fix:'Add a short reassurance line ("we won\u2019t spam you" / link to privacy policy) near the submit button.', effort:'Low', impact:'Reduced privacy-related hesitation' },
+    { id:'F5', severity:'High', title:'Form is not visible without scrolling',
+      observation:'The form sits below the fold on the page it\u2019s meant to convert on.',
+      mechanism:'Visitors who don\u2019t scroll never see the conversion path at all.',
+      fix:'Move the form above the fold, or add a visible anchor link/CTA that jumps to it.', effort:'Low', impact:'More visitors reach the form' },
+  ],
+};
+
+let customFindings = []; // {section, title, severity, observation, mechanism, fix, effort, impact}
+let customIdCounter = 1;
+
+function sevClass(s){
+  s=(s||'').toLowerCase();
+  if(s==='critical')return 'critical';
+  if(s==='high')return 'poor';
+  if(s==='medium')return 'fair';
+  return 'good';
+}
+function badgeClass(s){
+  s=(s||'').toLowerCase();
+  if(s==='critical')return 'b-critical';
+  if(s==='high')return 'b-high';
+  if(s==='medium')return 'b-medium';
+  return 'b-low';
+}
+function priBadge(p){
+  if(p==='P1')return 'b-p1';
+  if(p==='P2')return 'b-p2';
+  return 'b-p3';
+}
+function sevBadgeClass(s){
+  s=(s||'').toLowerCase();
+  if(s==='critical')return 'sev-critical';
+  if(s==='high')return 'sev-high';
+  if(s==='medium')return 'sev-medium';
+  return 'sev-low';
+}
+
+// ---------- upload handling ----------
+const dz = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+
+function handleFiles(fileList){
+  Array.from(fileList).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const tag = guessTag(file.name);
+      // Downscale + re-encode as JPEG immediately. Raw screenshots (especially
+      // retina/mobile captures) are routinely 3-6MB each as PNG — left
+      // uncompressed, a handful of them alone is what balloons the PDF export
+      // to tens of MB. This keeps everything the app touches lightweight.
+      const compressed = await compressImage(e.target.result, 1400, 0.72);
+      shots.push({ file, dataUrl: compressed, tag, caption: tag });
+      renderShotList();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Resizes an image to a max dimension and re-encodes as JPEG at the given
+// quality (0-1). Returns a Promise<dataUrl>. This is what keeps screenshot
+// size under control everywhere downstream — on screen and in the PDF.
+function compressImage(dataUrl, maxDim, quality){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if(width > maxDim || height > maxDim){
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl); // fall back to original if decode fails
+    img.src = dataUrl;
+  });
+}
+
+function guessTag(name){
+  const n = name.toLowerCase();
+  if(n.includes('mobile')) return 'Mobile view';
+  if(n.includes('checkout') || n.includes('cart')) return 'Checkout';
+  if(n.includes('product') || n.includes('pdp')) return 'Product page';
+  if(n.includes('form')) return 'Forms';
+  return 'Homepage';
+}
+
+function renderShotList(){
+  const list = document.getElementById('shotList');
+  list.innerHTML = '';
+  shots.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'shot-item';
+    el.innerHTML = `
+      <img src="${s.dataUrl}">
+      <span class="shot-name">${s.file.name}</span>
+      <select onchange="shots[${i}].tag=this.value">
+        ${SECTION_OPTIONS.map(o => `<option ${o===s.tag?'selected':''}>${o}</option>`).join('')}
+      </select>
+      <span class="shot-remove" onclick="removeShot(${i})">&times;</span>
+    `;
+    list.appendChild(el);
+  });
+  renderChecklist();
+}
+
+function removeShot(i){
+  shots.splice(i,1);
+  renderShotList();
+}
+
+// ---------- checklist rendering ----------
+function renderChecklist(){
+  const container = document.getElementById('checklistContainer');
+  const openSections = new Set(Array.from(container.querySelectorAll('.checklist-body:not(.collapsed)')).map(el => el.dataset.section));
+  container.innerHTML = '';
+
+  SECTION_OPTIONS.forEach((section, idx) => {
+    const items = ISSUE_LIBRARY[section] || [];
+    const collapsed = openSections.size ? !openSections.has(section) : idx !== 0;
+    const wrap = document.createElement('div');
+    wrap.className = 'checklist-section';
+
+    let bodyHtml = '';
+    items.forEach(item => {
+      bodyHtml += `
+        <label class="issue-row">
+          <input type="checkbox" class="issue-checkbox" data-section="${section}" data-id="${item.id}">
+          <span class="issue-label">${item.title}</span>
+          <span class="issue-sev ${sevBadgeClass(item.severity)}">${item.severity}</span>
+        </label>`;
+    });
+
+    const customForSection = customFindings.filter(f => f.section === section);
+    let customHtml = customForSection.map((f,ci) => `<div class="custom-tag">+ custom: "${f.title}" (${f.severity}) <span class="shot-remove" style="font-size:13px" onclick="removeCustom('${f._cid}')">&times;</span></div>`).join('');
+
+    bodyHtml += `
+      <div class="custom-add-row">
+        <input type="text" placeholder="Describe an issue not in this list..." id="customInput-${idx}">
+        <button onclick="addCustomIssue('${section}', ${idx})">+ Add</button>
+      </div>
+      ${customHtml}`;
+
+    wrap.innerHTML = `
+      <div class="checklist-hdr" onclick="toggleChecklistSection(this)">
+        <span class="checklist-hdr-title">${section}</span>
+        <span class="checklist-hdr-count">${items.length ? items.length + ' common issues' : 'custom only'}</span>
+      </div>
+      <div class="checklist-body ${collapsed?'collapsed':''}" data-section="${section}">${bodyHtml}</div>
+    `;
+    container.appendChild(wrap);
+  });
+}
+
+function toggleChecklistSection(hdrEl){
+  const body = hdrEl.nextElementSibling;
+  body.classList.toggle('collapsed');
+}
+
+function addCustomIssue(section, idx){
+  const input = document.getElementById(`customInput-${idx}`);
+  const val = input.value.trim();
+  if(!val) return;
+  customFindings.push({
+    _cid: 'custom-' + (customIdCounter++),
+    section, title: val, severity: 'Medium',
+    observation: val, mechanism: 'Flagged manually as a conversion barrier during the audit.',
+    fix: 'To be defined.', effort: 'Medium', impact: 'To be estimated.'
+  });
+  input.value = '';
+  renderChecklist();
+}
+
+function removeCustom(cid){
+  customFindings = customFindings.filter(f => f._cid !== cid);
+  renderChecklist();
+}
+
+// ---------- report generation (rule-based, no network calls) ----------
+function generateReport(){
+  const domain = document.getElementById('domainInput').value.trim();
+  if(!domain){ alert('Enter the store domain first.'); return; }
+
+  const statusArea = document.getElementById('statusArea');
+
+  const checkedBoxes = Array.from(document.querySelectorAll('.issue-checkbox:checked'));
+  if(checkedBoxes.length === 0 && customFindings.length === 0){
+    statusArea.innerHTML = `<div class="error-box">Check at least one issue in the checklist, or add a standalone finding, before generating the report.</div>`;
+    return;
+  }
+
+  // build findings from checked library issues
+  const libraryFindings = checkedBoxes.map(cb => {
+    const section = cb.dataset.section;
+    const item = ISSUE_LIBRARY[section].find(i => i.id === cb.dataset.id);
+    return {
+      section,
+      severity: item.severity,
+      title: item.title,
+      observation: item.observation,
+      mechanism: item.mechanism,
+      fix: item.fix,
+      impact: item.impact,
+      effort: item.effort,
+      priority: SEV_PRIORITY[item.severity]
+    };
+  });
+
+  const customAsFindings = customFindings.map(f => ({
+    section: f.section, severity: f.severity, title: f.title,
+    observation: f.observation, mechanism: f.mechanism, fix: f.fix,
+    impact: f.impact, effort: f.effort, priority: SEV_PRIORITY[f.severity]
+  }));
+
+  const sevOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+  findings = [...libraryFindings, ...customAsFindings]
+    .sort((a,b) => sevOrder[a.severity] - sevOrder[b.severity])
+    .map((f,i) => ({ id: `F-${String(i+1).padStart(2,'0')}`, ...f }));
+
+  // compute section scores: only for sections with a screenshot OR a checked/custom issue
+  const sectionsWithData = new Set([
+    ...shots.map(s => s.tag),
+    ...findings.map(f => f.section)
+  ]);
+
+  sectionScores = {};
+  sectionsWithData.forEach(section => {
+    const sectionFindings = findings.filter(f => f.section === section);
+    const deduction = sectionFindings.reduce((sum,f) => sum + (SEV_DEDUCTION[f.severity] || 0), 0);
+    sectionScores[section] = Math.max(5, 100 - deduction);
+  });
+
+  const scoreVals = Object.values(sectionScores);
+  overallScore = scoreVals.length ? Math.round(scoreVals.reduce((a,b)=>a+b,0) / scoreVals.length) : null;
+
+  statusArea.innerHTML = `<div class="status">Report generated — ${findings.length} finding(s) across ${Object.keys(sectionScores).length} section(s).</div>`;
+  renderReport(domain);
+  renderOutreachEmail(domain);
+}
+
+function addManualFinding(){
+  findings.push({
+    id: `F-${String(findings.length+1).padStart(2,'0')}`,
+    section: 'Homepage', severity: 'Medium', title: 'New finding — click to edit',
+    observation: 'What you observed.', mechanism: 'Why it hurts conversion.',
+    fix: 'What to do about it.', impact: 'Expected effect.', effort: 'Medium', priority: 'P2'
+  });
+  const domain = document.getElementById('domainInput').value.trim() || 'yourstore.co.za';
+  renderReport(domain);
+}
+
+// ---------- report rendering ----------
+function renderReport(domain){
+  const paid = parseFloat(document.getElementById('paidTraffic').value);
+  const bounce = parseFloat(document.getElementById('bounceRate').value);
+  const avgVisit = parseFloat(document.getElementById('avgVisit').value);
+  const pagesVisit = parseFloat(document.getElementById('pagesVisit').value);
+  const hasStats = !isNaN(paid) || !isNaN(bounce) || !isNaN(avgVisit) || !isNaN(pagesVisit);
+  const contact = document.getElementById('contactInput').value.trim() || '[ your name / contact ]';
+
+  const report = document.getElementById('report');
+  report.style.display = 'block';
+  document.getElementById('exportRow').style.display = 'flex';
+
+  let html = '';
+
+  // Each top-level chunk below is wrapped as an independent "pdf-block" —
+  // the PDF export renders and paginates these individually so a card is
+  // never sliced in half across a page break. data-newpage="true" forces
+  // that block to start on a fresh PDF page (unless it's already at the top).
+
+  // block: hook (only if stats given)
+  if(hasStats){
+    html += `<div class="report-page pdf-block" data-newpage="true">
+      <div class="rp-header"><span class="rp-domain">${domain}</span><span>traffic + CRO audit</span></div>`;
+    if(!isNaN(avgVisit)){
+      html += `<div class="hook-box">
+        <div class="hook-label">You're paying for traffic that leaves in</div>
+        <div class="hook-num">${avgVisit} seconds</div>
+      </div>`;
+    }
+    html += `<div class="stat-grid">`;
+    if(!isNaN(paid)) html += `<div class="stat-box"><div class="stat-label">PAID TRAFFIC</div><div class="stat-value">${paid}%</div></div>`;
+    if(!isNaN(bounce)) html += `<div class="stat-box"><div class="stat-label">BOUNCE RATE</div><div class="stat-value">${bounce}%</div></div>`;
+    if(!isNaN(pagesVisit)) html += `<div class="stat-box"><div class="stat-label">PAGES / VISIT</div><div class="stat-value">${pagesVisit}</div></div>`;
+    html += `</div></div>`;
+  }
+
+  // block: evidence (only if screenshots were uploaded)
+  if(shots.length){
+    html += `<div class="report-page pdf-block" data-newpage="true">
+      <div class="rp-header"><span class="rp-domain">${domain}</span><span>the evidence</span></div>
+      <div class="evidence-grid">`;
+    shots.forEach((s,i) => {
+      html += `<div class="evidence-item">
+        <img src="${s.dataUrl}">
+        <div class="evidence-tag">${s.tag}</div>
+        <div class="evidence-cap editable" contenteditable="true" data-shot="${i}">${s.caption || s.tag}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // block: scorecard
+  html += `<div class="report-page pdf-block" data-newpage="true">
+    <div class="rp-header"><span class="rp-domain">${domain}</span><span>CRO scorecard</span></div>`;
+
+  if(overallScore !== null){
+    html += `<div class="overall-card">
+      <div class="overall-score ${sevClass(overallScore<40?'critical':overallScore<60?'high':overallScore<80?'medium':'low')}">${overallScore}</div>
+      <div class="overall-meta"><div class="ol">Overall CRO score</div><div class="os">out of 100, based on ${findings.length} findings across ${Object.keys(sectionScores).length} areas</div></div>
+    </div>`;
+  }
+
+  html += `<div class="score-grid">`;
+  Object.entries(sectionScores).forEach(([name,score]) => {
+    const cls = sevClass(score<40?'critical':score<60?'high':score<80?'medium':'low');
+    html += `<div class="score-card"><div class="score-area">${name}</div><div class="score-num ${cls}">${score}</div></div>`;
+  });
+  html += `</div></div>`;
+
+  // block: findings header (own block, starts a fresh page)
+  html += `<div class="report-page pdf-block" data-newpage="true">
+    <div class="rp-header"><span class="rp-domain">${domain}</span><span>findings</span></div>
+    <div class="section-title" style="margin:6px 0 0">${findings.length} finding${findings.length===1?'':'s'}</div>
+  </div>`;
+
+  // block: each finding is its own block so it never splits mid-card
+  findings.forEach((f, i) => {
+    html += `<div class="finding pdf-block">
+      <div class="finding-hdr">
+        <span class="finding-title editable" contenteditable="true">${f.title}</span>
+        <span class="badge ${badgeClass(f.severity)}">${f.severity}</span>
+        <span class="badge ${priBadge(f.priority)}">${f.priority}</span>
+      </div>
+      <div class="finding-body">
+        <div class="finding-row"><span class="finding-lbl">Section</span><span class="editable" contenteditable="true">${f.section}</span></div>
+        <div class="finding-row"><span class="finding-lbl">Observation</span><span class="editable" contenteditable="true">${f.observation}</span></div>
+        <div class="finding-row"><span class="finding-lbl">Why it hurts conversion</span><span class="editable" contenteditable="true">${f.mechanism}</span></div>
+        <div class="finding-row"><span class="finding-lbl">Fix</span><span class="editable" contenteditable="true">${f.fix}</span></div>
+        <div class="finding-row"><span class="finding-lbl">Expected impact</span><span class="editable" contenteditable="true">${f.impact}</span></div>
+        <div class="finding-row"><span class="finding-lbl">Effort</span><span class="editable" contenteditable="true">${f.effort}</span></div>
+      </div>
+    </div>`;
+  });
+
+  // block: CTA
+  html += `<div class="cta-box pdf-block">
+    <h3>Want the walkthrough on fixing these?</h3>
+    <p>15 minutes, no pitch — just the fix, applied to your store.</p>
+    <div class="contact editable" contenteditable="true">${contact}</div>
+  </div>`;
+
+  report.innerHTML = html;
+
+  // wire up caption edits back into state so PDF export reflects them
+  report.querySelectorAll('.evidence-cap').forEach(el => {
+    el.addEventListener('blur', () => {
+      const idx = parseInt(el.dataset.shot, 10);
+      if(shots[idx]) shots[idx].caption = el.textContent;
+    });
+  });
+}
+
+function scrollToReport(){
+  document.getElementById('report').scrollIntoView({behavior:'smooth'});
+}
+
+// ---------- outreach email (auto-filled, no manual placeholders) ----------
+function renderOutreachEmail(domain){
+  const brand = document.getElementById('brandInput').value.trim() || domain;
+  const first = document.getElementById('recipientInput').value.trim() || 'there';
+  const signature = document.getElementById('contactInput').value.trim() || 'MGMetrics — CRO for D2C ecommerce';
+
+  const bounce = parseFloat(document.getElementById('bounceRate').value);
+  const avgVisit = parseFloat(document.getElementById('avgVisit').value);
+  const hasHookStats = !isNaN(bounce) && !isNaN(avgVisit);
+  const n = findings.length;
+  const nWord = n === 1 ? 'finding' : 'findings';
+
+  let subject, body;
+
+  if(hasHookStats){
+    // data-hook version — used automatically whenever bounce rate + avg. visit are on hand
+    subject = `${brand} — found something costing you conversions`;
+    body = `Hi ${first},
+
+I pulled together a quick conversion audit on ${brand} — no strings attached, just sending it over.
+
+Short version: ${bounce}% of your traffic never makes it past the first page, in an average of ${avgVisit} seconds. That's not really a traffic problem — it's a "keep the traffic you're already paying for" problem, which is the cheaper one to fix.
+
+Attached is the full breakdown — ${n} specific ${nWord}, scored and prioritized, each with what's costing you and the fix.
+
+If any of it's useful, happy to walk through the top 3 in 15 minutes. No pitch, just the audit.
+
+${signature}`;
+  } else {
+    // direct version — used automatically when no traffic stats were entered
+    const scoreText = overallScore !== null ? `an overall CRO score of ${overallScore}/100` : 'a full section-by-section breakdown';
+    subject = `a free CRO audit for ${brand}`;
+    body = `Hi ${first},
+
+I do conversion rate optimization for D2C ecommerce stores, and I put together a free audit of ${brand} as a way to show the kind of work I do — no pitch, no catch.
+
+It's attached: ${scoreText}, and ${n} specific ${nWord} with the fix for each.
+
+Take a look whenever — if it's useful and you want to dig into any of it, I'm around for a quick call.
+
+${signature}`;
+  }
+
+  document.getElementById('emailSubject').textContent = subject;
+  document.getElementById('emailBody').textContent = body;
+  document.getElementById('emailCard').style.display = 'block';
+}
+
+function copyEmail(btn){
+  const subject = document.getElementById('emailSubject').textContent;
+  const body = document.getElementById('emailBody').textContent;
+  const text = `Subject: ${subject}\n\n${body}`;
+  navigator.clipboard.writeText(text).then(() => {
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  }).catch(() => { alert('Copy failed — select the text and copy manually.'); });
+}
+
+// ---------- PDF export ----------
+// Strategy: every logical chunk of the report (hook, evidence, scorecard,
+// findings header, each individual finding, the CTA) is marked as its own
+// .pdf-block in the DOM. We render each block to its own canvas, then pack
+// them onto A4 pages top-to-bottom — starting a new page whenever a block
+// won't fit in the remaining space, or when it's flagged data-newpage="true".
+// This means a block (e.g. a single finding) is never sliced across a page
+// break, which is what caused the "scattered" look before. A slim repeated
+// header + page-number footer is added afterwards on every page.
+async function exportPDF(){
+  const report = document.getElementById('report');
+  if(!report.innerHTML.trim()){ alert('Generate a report first.'); return; }
+
+  const blocks = Array.from(report.querySelectorAll('.pdf-block'));
+  if(!blocks.length){ alert('Nothing to export.'); return; }
+
+  const statusArea = document.getElementById('statusArea');
+  statusArea.innerHTML = `<div class="status">Building PDF…</div>`;
+
+  const { jsPDF } = window.jspdf;
+  // compress:true turns on jsPDF's internal stream compression (deflate) —
+  // costs nothing visually, just shrinks the file.
+  const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4', compress: true });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 30;
+  const headerH = 24;   // reserved space at top of every page for the running header
+  const footerH = 18;   // reserved space at bottom of every page for the page number
+  const blockGap = 10;  // vertical gap between stacked blocks
+  const contentTop = margin + headerH;
+  const contentBottom = pageHeight - margin - footerH;
+  const maxContentH = contentBottom - contentTop;
+  const usableWidth = pageWidth - margin * 2;
+  const JPEG_QUALITY = 0.85; // plenty crisp for on-screen/print review, far smaller than PNG
+
+  // pass 1 — render every block to a canvas once
+  // scale 1.5 (not 2) — still sharp at A4 print size, ~44% fewer pixels to encode
+  const rendered = [];
+  for(const el of blocks){
+    const canvas = await html2canvas(el, { scale: 1.5, backgroundColor: '#ffffff' });
+    const imgW = usableWidth;
+    const imgH = canvas.height * imgW / canvas.width;
+    rendered.push({ canvas, imgW, imgH, forceNewPage: el.dataset.newpage === 'true' });
+  }
+
+  // pass 2 — pack blocks onto pages without splitting any block mid-content
+  let cursorY = contentTop;
+  function startNewPage(){ pdf.addPage(); cursorY = contentTop; }
+
+  rendered.forEach(b => {
+    const atTop = (cursorY === contentTop);
+    if(!atTop && (b.forceNewPage || (cursorY + b.imgH) > contentBottom)){
+      startNewPage();
+    }
+
+    if(b.imgH <= maxContentH){
+      const imgData = b.canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+      pdf.addImage(imgData, 'JPEG', margin, cursorY, b.imgW, b.imgH, undefined, 'FAST');
+      cursorY += b.imgH + blockGap;
+    } else {
+      // fallback: a single block taller than one full page — slice just this block
+      if(cursorY !== contentTop) startNewPage();
+      const scaleFactor = b.canvas.width / b.imgW;
+      const sliceHeightPx = maxContentH * scaleFactor;
+      let renderedPx = 0;
+      let first = true;
+      while(renderedPx < b.canvas.height){
+        if(!first) startNewPage();
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = b.canvas.width;
+        sliceCanvas.height = Math.min(sliceHeightPx, b.canvas.height - renderedPx);
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(b.canvas, 0, renderedPx, b.canvas.width, sliceCanvas.height, 0, 0, b.canvas.width, sliceCanvas.height);
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', JPEG_QUALITY);
+        const sliceImgH = sliceCanvas.height / scaleFactor;
+        pdf.addImage(sliceData, 'JPEG', margin, cursorY, b.imgW, sliceImgH, undefined, 'FAST');
+        cursorY += sliceImgH + blockGap;
+        renderedPx += sliceHeightPx;
+        first = false;
+      }
+    }
+  });
+
+  // pass 3 — repeated header + footer with page numbers, drawn as real text (crisp, not rasterized)
+  const domain = document.getElementById('domainInput').value.trim() || 'store';
+  const totalPages = pdf.internal.getNumberOfPages();
+  for(let p = 1; p <= totalPages; p++){
+    pdf.setPage(p);
+    pdf.setFontSize(9);
+    pdf.setTextColor(140,140,140);
+    pdf.text(`${domain}  ·  CRO Audit Report`, margin, margin + 8);
+    pdf.setDrawColor(230,230,230);
+    pdf.setLineWidth(0.5);
+    pdf.line(margin, margin + 14, pageWidth - margin, margin + 14);
+    pdf.text(`Page ${p} of ${totalPages}`, pageWidth - margin, pageHeight - margin + 6, { align: 'right' });
+  }
+
+  pdf.save(`${domain.replace(/[^a-z0-9]/gi,'_')}_cro_audit.pdf`);
+  statusArea.innerHTML = `<div class="status">PDF exported — ${totalPages} page${totalPages===1?'':'s'}.</div>`;
+}
+
+// initial render
+renderChecklist();
+</script>
+</body>
+</html>
